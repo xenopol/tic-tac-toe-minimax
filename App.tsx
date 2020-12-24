@@ -15,9 +15,15 @@ enum Player {
 }
 type Cell = Player | undefined
 type CellId = number
+type GameState = {
+  board: Cell[]
+  player: Player
+}
 
-const initialBoard = Array(9).fill(undefined)
-const initialPlayer = Player.Human
+const initialState = {
+  board: Array(9).fill(undefined),
+  player: Player.Human,
+}
 
 const getWinnerCellIds = (board: Cell[]) =>
   [
@@ -58,51 +64,44 @@ const createAlert = (player: Player | null, resetGame: () => void) => {
 const togglePlayer = (player: Player) =>
   player === Player.Computer ? Player.Human : Player.Computer
 
-const minimax = (isMax: boolean, depth: number, board: Cell[]) => {
+const minimaxMoves = (
+  isMax: boolean,
+  depth: number,
+  emptyCellIds: number[],
+  board: Cell[],
+) =>
+  emptyCellIds.map((cellId) =>
+    minimax(
+      !isMax,
+      depth + 1,
+      updateBoard(cellId, isMax ? Player.Computer : Player.Human, board),
+    ),
+  )
+
+const minimax = (isMax: boolean, depth: number, board: Cell[]): number => {
   const emptyCellIds = getEmptyCellIds(board)
   const winnerCellIds = getWinnerCellIds(board)
   const winner = board[winnerCellIds[0]]
 
-  if (winner) return winner === Player.Computer ? 100 : -100
+  if (winner) return winner === Player.Computer ? 100 - depth : -100 + depth
   if (isDraw(board)) return 0
 
-  if (isMax) {
-    let value = -Infinity
-    emptyCellIds.forEach((cellId) => {
-      const nextBoard = updateBoard(cellId, Player.Computer, board)
-      const score = minimax(!isMax, depth + 1, nextBoard)
-      value = Math.max(value, score)
-    })
-    return value
-  } else {
-    let value = Infinity
-    emptyCellIds.forEach((cellId) => {
-      const nextBoard = updateBoard(cellId, Player.Human, board)
-      const score = minimax(!isMax, depth + 1, nextBoard)
-      value = Math.min(value, score)
-    })
-    return value
-  }
+  const moves = minimaxMoves(isMax, depth, emptyCellIds, board)
+  return isMax ? Math.max(...moves) : Math.min(...moves)
 }
 
-const getComputerMove = (board: Cell[]) => {
-  const emptyCellIds = getEmptyCellIds(board)
-  let value = -Infinity
-  let bestMove = -Infinity
-  emptyCellIds.forEach((cellId) => {
-    const nextBoard = updateBoard(cellId, Player.Computer, board)
-    const score = minimax(false, 0, nextBoard)
-    if (score > value) {
-      value = score
-      bestMove = cellId
-    }
-  })
-  return bestMove
-}
+const getComputerMove = (board: Cell[]) =>
+  getEmptyCellIds(board).reduce(
+    (acc, cellId) => {
+      const nextBoard = updateBoard(cellId, Player.Computer, board)
+      const score = minimax(false, 0, nextBoard)
+      return score > acc.score ? {score, cellId} : acc
+    },
+    {score: -Infinity, cellId: -1},
+  ).cellId
 
 const Board = () => {
-  const [board, setBoard] = useState<Cell[]>(initialBoard)
-  const [player, setPlayer] = useState<Player>(initialPlayer)
+  const [{board, player}, setState] = useState<GameState>(initialState)
   const winnerCellIds = getWinnerCellIds(board)
   const winner = board[winnerCellIds[0]]
   const draw = isDraw(board)
@@ -111,23 +110,17 @@ const Board = () => {
     const cellOccupied = board[cellId]
     if (cellOccupied) return
 
-    setBoard(updateBoard(cellId, player, board))
-    setPlayer(togglePlayer)
+    setState({
+      board: updateBoard(cellId, player, board),
+      player: togglePlayer(player),
+    })
   }
 
-  const reset = () => {
-    setBoard(initialBoard)
-    setPlayer(initialPlayer)
-  }
+  const reset = () => setState(initialState)
 
   if (winner) createAlert(winner, reset)
   if (draw) createAlert(null, reset)
-  if (
-    !winner &&
-    !draw &&
-    board.filter(Boolean).length &&
-    player === Player.Computer
-  )
+  if (!winner && !draw && player === Player.Computer)
     play(getComputerMove(board))
 
   return (
