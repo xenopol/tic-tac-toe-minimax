@@ -64,37 +64,54 @@ const createAlert = (player: Player | null, resetGame: () => void) => {
 const togglePlayer = (player: Player) =>
   player === Player.Computer ? Player.Human : Player.Computer
 
-const minimaxMoves = (
+const alphaBeta = (
   isMax: boolean,
   depth: number,
-  emptyCellIds: number[],
+  alpha: number,
+  beta: number,
   board: Cell[],
-) =>
-  emptyCellIds.map((cellId) =>
-    minimax(
-      !isMax,
-      depth + 1,
-      updateBoard(cellId, isMax ? Player.Computer : Player.Human, board),
-    ),
-  )
-
-const minimax = (isMax: boolean, depth: number, board: Cell[]): number => {
+) => {
   const emptyCellIds = getEmptyCellIds(board)
+  let value = isMax ? -Infinity : Infinity
+  emptyCellIds.some((cellId) => {
+    const nextBoard = updateBoard(
+      cellId,
+      isMax ? Player.Computer : Player.Human,
+      board,
+    )
+    const score = minimax(!isMax, depth + 1, alpha, beta, nextBoard)
+    value = isMax ? Math.max(value, score) : Math.min(value, score)
+
+    if (isMax) alpha = Math.max(alpha, value)
+    else beta = Math.min(beta, value)
+
+    return beta <= alpha
+  })
+
+  return value
+}
+
+const minimax = (
+  isMax: boolean,
+  depth: number,
+  alpha: number,
+  beta: number,
+  board: Cell[],
+): number => {
   const winnerCellIds = getWinnerCellIds(board)
   const winner = board[winnerCellIds[0]]
 
   if (winner) return winner === Player.Computer ? 100 - depth : -100 + depth
   if (isDraw(board)) return 0
 
-  const moves = minimaxMoves(isMax, depth, emptyCellIds, board)
-  return isMax ? Math.max(...moves) : Math.min(...moves)
+  return alphaBeta(isMax, depth, alpha, beta, board)
 }
 
 const getComputerMove = (board: Cell[]) =>
   getEmptyCellIds(board).reduce(
     (acc, cellId) => {
       const nextBoard = updateBoard(cellId, Player.Computer, board)
-      const score = minimax(false, 0, nextBoard)
+      const score = minimax(false, 0, -Infinity, Infinity, nextBoard)
       return score > acc.score ? {score, cellId} : acc
     },
     {score: -Infinity, cellId: -1},
